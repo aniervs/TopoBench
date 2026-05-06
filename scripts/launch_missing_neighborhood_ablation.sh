@@ -67,7 +67,7 @@ try:
         mem_mb.append(int(mem.strip()))
     if not indices: print('0'); exit(0)
     min_mem_gb = min(mem_mb) / 1024
-    jobs = 4 if min_mem_gb >= 80 else (2 if min_mem_gb <= 30 else 3)
+    jobs = 7 if min_mem_gb >= 80 else (2 if min_mem_gb <= 30 else 3)
     print(jobs, ' '.join(indices))
 except Exception: print('2 0')
 ")
@@ -225,7 +225,7 @@ generate_all_commands() {
                                 for v in "${VALS[@]}"; do
                                     final_args=("${args[@]}" "$key=$v" "${FIXED_ARGS[@]}")
                                     final_name="${run_name}_${v}"
-                                    echo "${final_name};python -m topobench ${final_args[*]} logger.wandb.project=$proj logger.wandb.entity=$wandb_entity +logger.wandb.name=$final_name"
+                                    echo "${final_name};python -m topobench ${final_args[*]} logger.wandb.project=$proj +logger.wandb.entity=$wandb_entity +logger.wandb.name=$final_name"
                                 done
                                 continue 2 
                             else
@@ -235,7 +235,7 @@ generate_all_commands() {
                     fi
 
                     final_args=("${args[@]}" "${FIXED_ARGS[@]}")
-                    echo "${run_name};python -m topobench ${final_args[*]} logger.wandb.project=$proj logger.wandb.entity=$wandb_entity +logger.wandb.name=$run_name"
+                    echo "${run_name};python -m topobench ${final_args[*]} logger.wandb.project=$proj +logger.wandb.entity=$wandb_entity +logger.wandb.name=$run_name"
 
                 done; done; done; done; done; done; done
             done

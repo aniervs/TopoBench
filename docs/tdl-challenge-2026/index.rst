@@ -1,21 +1,20 @@
-TAG-DS TDL Challenge 2026
--------------------------
+TDL Challenge 2026
+-------------------
 
-Welcome to the **Topological Deep Learning Challenge 2026: Bridging the Gap**, sponsored by `New Theory <https://www.newtheory.ai/>`__ and hosted at the second `Topology, Algebra, and Geometry in Data Science (TAG-DS) Conference <https://www.tagds.com/events/tag-ds-2026>`__.
+Welcome to the **Topological Deep Learning Challenge 2026: Bridging the Gap**, 
+sponsored by `Arlequin AI <https://www.arlq.ai/>`__ and `New Theory <https://www.newtheory.ai/>`__, 
+and hosted at the second `Topology, Algebra, and Geometry in Data Science (TAG-DS) Conference <https://www.tagds.com/events/tag-ds-2026>`__.
 
-*Organizers:* Guillermo Bernardez, Lev Telyatnikov, Mathilde Papillon, Marco Montagna, Miquel Ferriol, Raffael Theiler, Louis Van Langendonck, Olga Fink, Nina Miolane
+*Organizers:* Guillermo Bernárdez, Lev Telyatnikov, Mathilde Papillon, Marco Montagna, Louisa Cornelis, Louis Van Langendonck, Olga Fink, Nina Miolane.
 
 .. seealso::
    Link to the challenge repository: `<https://github.com/geometric-intelligence/TopoBench>`__.
-
-.. important::
-   👉 **Now live:** Join us in **Bridging the Gap** between Graph Neural Networks and Topological Deep Learning!
 
 
 Motivation
 ----------
 
-.. figure:: ../_static/logos/challenge_image.png
+.. figure:: ../_static/logos/2026_challenge_image.png
    :name: fig:challenge_image_2026
 
 Despite rapid infrastructure advances and deep theoretical connections, the
@@ -52,11 +51,6 @@ formulate data-driven answers to long-standing scientific questions:
 - **The Topological Component:** Under what specific data regimes and
   controlled environments do TDL models consistently provide unique
   capabilities over standard SOTA GNN approaches (if any)?
-
-.. Note: an alternative, more historical motivation draft (mentioning the
-   2023/2024/2025 editions and the "evolution of relational learning") is
-   available in the source Google Doc as "Iteration 1". Swap it in here if
-   preferred.
 
 
 Description of the Challenge
@@ -116,25 +110,23 @@ PMLR through Topology, Algebra, and Geometry in Machine Learning/Data Science
 🏆 **Cash prizes**: Two winning teams (one per track) will be announced at
 TAG-DS 2026 during the Awards Ceremony.
 
-- 💰 **Track 1 (GNNs) winner:** $1,000 USD (sponsored by `New Theory <https://www.newtheory.ai/>`__).
-- 💰 **Track 2 (TNNs) winner:** $1,000 USD (sponsored by `New Theory <https://www.newtheory.ai/>`__).
+- 💰 **Track 1 (GNNs) winner:** $1,000 USD (sponsored by `Arlequin AI <https://www.arlq.ai/>`__ and `New Theory <https://www.newtheory.ai/>`__).
+- 💰 **Track 2 (TNNs) winner:** $1,000 USD (sponsored by `Arlequin AI <https://www.arlq.ai/>`__ and `New Theory <https://www.newtheory.ai/>`__).
 
 🌴 **Research internship — Geometric Intelligence Lab, UCSB (USA):**
 A team, pending evaluation results and interest, will be invited for a visit
 of up to **two months** at the Geometric Intelligence Lab, University of
 California, Santa Barbara. During the visit, winners will work on cutting-edge
-methods bridging GNNs and TDL. Travel costs will be reimbursed and financial
-assistance for lodging will be provided. Remote participation is also
-available. [2]_
+methods and applications of GNNs and TDL. Travel costs will be reimbursed and financial
+assistance for lodging will be provided. [2]_
 
 🏔️ **Research internship — IMOS Lab, EPFL (Switzerland):**
-A team, pending evaluation results and interest, will be invited for a research
-internship at the **Intelligent Maintenance and Operations Systems (IMOS) Lab**
-at EPFL in Lausanne, Switzerland. Winners will develop advanced relational
-learning and TDL methods in a world-class academic environment. **MSc enrollment**
-at the time of the internship is required. Financial assistance for lodging
-will be provided; winners will likely need to secure a **visa** and **work
-authorization**.
+A team, pending evaluation results and interest, will be invited for a research 
+internship at the **Intelligent Maintenance and Operations Systems (IMOS) Lab** 
+at EPFL in Lausanne, Switzerland. Winners will perform research in a world-class 
+academic environment. **MSc enrollment** at the time of the internship is required. 
+Financial assistance for lodging will be provided; winners will likely need to 
+secure a **visa** and **work authorization**.
 
 .. note::
    Organizers reserve the right to **reallocate prize money** between tracks
@@ -421,15 +413,20 @@ Organizers and Sponsors
 
 .. rst-class:: text-center
 
-|logo_tagds_2026|
+|logo_arlq|
 |logo_new_theory|
 |logo_gil|
 |logo_imos|
 
-.. |logo_tagds_2026| image:: ../_static/logos/TAG_DS_2025_white_teal.png
+.. .. |logo_tagds_2026| image:: ../_static/logos/TAG_DS_2025_white_teal.png
+..    :height: 220px
+..    :alt: TAG-DS Conference 2026
+..    :target: https://www.tagds.com/events/tag-ds-2026
+
+.. |logo_arlq| image:: ../_static/logos/arlequin.png
    :height: 220px
-   :alt: TAG-DS Conference 2026
-   :target: https://www.tagds.com/events/tag-ds-2026
+   :alt: Arlequin AI
+   :target: https://www.arlq.ai/
 
 .. |logo_new_theory| image:: ../_static/logos/new_theory.png
    :height: 220px

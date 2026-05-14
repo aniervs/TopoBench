@@ -36,7 +36,10 @@ Assess how your model compares against state-of-the-art topological neural netwo
 
 ---
 
-> 🏆 The **TAG-DS Topological Deep Learning Challenge 2025** has concluded! A huge shout-out to all participants. Check out the winners and honorable mentions on [`the challenge website`](https://geometric-intelligence.github.io/topobench/tdl-challenge/index.html).
+> 🏆 **2026 Topological Deep Learning Challenge** is now live! Check out guidelines and full details on [`the challenge website`](https://geometric-intelligence.github.io/topobench/tdl-challenge-2026/index.html).
+<p align="center">
+  <img src="resources/2026_challenge_flyer.png" width="700">
+</p>
 
 ---
 

@@ -10,8 +10,13 @@ Chooses the hyperparameter row with optimal validation mean for the dataset's
 winner-row selection in ``best_rerun_sh_generator``. The output includes paired
 train/val/test **mean** and **std** columns from the aggregated CSV.
 
+For **simplicial/mantra_betti_numbers**, selection still uses validation **loss** (min), but
+the collapsed CSV emits **two** rows per model (``#f1-1``, ``#f1-2``; ``β₀`` omitted) with
+test **F1** per column; y-axis labels use **f1** (not ``f1-1`` / ``f1-2``), and panel titles
+use ``$\\beta_1$`` / ``$\\beta_2$``.
+
 Seed aggregation and reruns assume the export includes all swept config columns listed in
-``utils.CONFIG_PARAM_KEYS`` (e.g. HOPSE_G ``transforms.hopse_encoding.pretrain_model``,
+``utils.CONFIG_PARAM_KEYS`` (e.g. HOPSE-GPSE ``transforms.hopse_encoding.pretrain_model``,
 SANN ``transforms.sann_encoding.*``); see ``main_loader`` / ``aggregator`` docs.
 
 The figure uses one column per dataset (max 4 per row), bars = models, error bars
@@ -55,18 +60,29 @@ from utils import (
     collapse_aggregated_wandb_csv,
     metric_name_tail,
     optimization_mode_for_metric_tail,
+    publication_label_hopse_from_hydra_model_path,
     safe_metric_col_token,
 )
 
 def _label_short(s: str, max_len: int = 28) -> str:
     t = str(s).strip()
-    if "/" in t:
+    hop = publication_label_hopse_from_hydra_model_path(t)
+    if hop:
+        t = hop
+    elif "/" in t:
         t = t.rsplit("/", 1)[-1]
     return t if len(t) <= max_len else t[: max_len - 1] + "..."
 
 
 def _dataset_title(dataset_path: str) -> str:
-    return _label_short(dataset_path, max_len=40)
+    s = str(dataset_path).strip()
+    if "#" in s and "mantra_betti" in s.lower():
+        base, _, suf = s.partition("#")
+        beta_title = {"f1-1": r"$\beta_1$", "f1-2": r"$\beta_2$"}.get(suf)
+        if beta_title:
+            return f"{_label_short(base, max_len=34)} · {beta_title}"
+        return f"{_label_short(base, max_len=34)} · {suf}"
+    return _label_short(s, max_len=40)
 
 
 def _legend_labels_for_models(models: list[str]) -> dict[str, str]:
@@ -126,7 +142,7 @@ def model_category(m: str) -> str:
     return "other"
 
 
-# Panel / legend order: MPNN, TopoTune, SANN, SCCNN, CWN, HOPSE-M, HOPSE-G, then other.
+# Panel / legend order: MPNN, TopoTune, SANN, SCCNN, CWN, HOPSE-M-*, HOPSE-GPSE, then other.
 _CATEGORY_ORDER = {
     "mpnn": 0,
     "topotune": 1,
@@ -151,9 +167,9 @@ _HOPSE_M_CELL_HEX = "#C8E6F5"
 _HOPSE_M_SIM_HEX = "#7DB6E8"
 _HOPSE_G_CELL_HEX = "#3D78B8"
 _HOPSE_G_SIM_HEX = "#0C335C"
-# SANN: warm amber (cell lighter, simplicial deeper) — distinct from TopoTune greens
-_SANN_CELL_HEX = "#F39C12"
-_SANN_SIM_HEX = "#B9770E"
+# SANN: pink / rose (cell lighter, simplicial deeper) — distinct from TopoTune greens & MPNN warm tones
+_SANN_CELL_HEX = "#F5B4D4"
+_SANN_SIM_HEX = "#C2187A"
 _SCCNN_HEX = "#8E44AD"
 _CWN_HEX = "#1ABC9C"
 _OTHER_HEX = "#6E6E6E"
@@ -382,7 +398,11 @@ def plot_collapsed_model_leaderboard(
             if n_b > 0:
                 ax.set_xlim(-0.5, (n_b - 1) + 0.5)
             ax.set_title(_dataset_title(ds), fontweight="semibold", pad=6)
-            ax.set_ylabel(metric_axis_label(monitor))
+            ds_l = str(ds).lower()
+            ylab_monitor = (
+                "val/f1" if ("mantra_betti" in ds_l and "#f1-" in ds_l) else monitor
+            )
+            ax.set_ylabel(metric_axis_label(ylab_monitor))
             _set_ylim_from_values_with_errors(ax, means, stds)
             ax.yaxis.grid(True, linestyle=":", linewidth=0.5, alpha=0.85)
             ax.set_axisbelow(True)

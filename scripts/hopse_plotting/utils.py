@@ -21,6 +21,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
 
+import numpy as np
 import pandas as pd
 
 # -----------------------------------------------------------------------------
@@ -43,18 +44,89 @@ DEFAULT_LEADERBOARD_PLOT_DIR = PLOTS_DIR / "leaderboard"
 # -----------------------------------------------------------------------------
 # Column layout (must match main_loader export CSV columns)
 # -----------------------------------------------------------------------------
+#
+# Sweep coverage (``scripts/*.sh``): ``hopse_m`` / ``hopse_g`` (preprocessing + hopse_encoding
+# + backbone n_layers, feature_encoder, optimizer, batch); ``topotune`` (``model.backbone.
+# neighborhoods``, ``model.backbone.GNN.num_layers``); ``sann`` (``transforms.sann_encoding.*``);
+# ``sccnn`` / ``cwn`` (backbone n_layers, feature_encoder, optimizer, batch). GNN sweeps use
+# ``transforms`` and ``transforms.Combined*`` when present. Reruns emit one ``key=value`` per
+# non-empty cell via ``hydra_overrides_from_aggregated_row``.
+
+MODEL_PREPROC_ENCODINGS = "model.preprocessing_params.encodings"
+HOPSE_M_MODEL_PATHS: frozenset[str] = frozenset({"simplicial/hopse_m", "cell/hopse_m"})
+
+
+# Publication-facing names (plots / LaTeX). Internal ``_sub_id`` for the manual-PSE branch stays ``pe``.
+HOPSE_PUBLICATION_LABEL_M_F = "HOPSE-M-F"
+HOPSE_PUBLICATION_LABEL_M_C = "HOPSE-M-C"
+HOPSE_PUBLICATION_LABEL_GPSE = "HOPSE-GPSE"
+HOPSE_PUBLICATION_LABEL_M = "HOPSE-M"
+
+
+def publication_label_hopse_from_backbone_token(model_backbone: str) -> str | None:
+    """
+    Map internal backbone tokens (e.g. from timing plots: ``hopse_m_F``, ``hopse_m_PE``, ``hopse_g``)
+    to publication labels. Unknown tokens return ``None``.
+    """
+    t = str(model_backbone or "").strip().replace("\r", "")
+    if not t:
+        return None
+    key = t.replace("-", "_")
+    if key == "hopse_m_F":
+        return HOPSE_PUBLICATION_LABEL_M_F
+    if key == "hopse_m_PE":
+        return HOPSE_PUBLICATION_LABEL_M_C
+    if key == "hopse_g":
+        return HOPSE_PUBLICATION_LABEL_GPSE
+    if key == "hopse_m":
+        return HOPSE_PUBLICATION_LABEL_M
+    low = key.lower()
+    if low.startswith("hopse_m_"):
+        suf = low[len("hopse_m_") :]
+        if suf == "f":
+            return HOPSE_PUBLICATION_LABEL_M_F
+        if suf == "pe":
+            return HOPSE_PUBLICATION_LABEL_M_C
+    return None
+
+
+def publication_label_hopse_from_hydra_model_path(model_path: str) -> str | None:
+    """Basename-only label when encoding branch is not in the dataframe (e.g. collapsed leaderboard)."""
+    m = str(model_path or "").replace("\r", "").strip()
+    low = m.lower()
+    base = low.rsplit("/", 1)[-1] if "/" in low else low
+    if base == "hopse_g":
+        return HOPSE_PUBLICATION_LABEL_GPSE
+    if base == "hopse_m":
+        return HOPSE_PUBLICATION_LABEL_M
+    return None
+
+
+def hopse_m_encoding_f_vs_pe_sub_id(encodings_val: Any) -> str:
+    """
+    HFKE or HKFE in ``model.preprocessing_params.encodings`` → ``f`` (HOPSE-M-F), else ``pe`` (manual PSE → **HOPSE-M-C** in figures).
+
+    Matches the sweep / LaTeX split in ``table_generator`` for separate best-val picks per branch.
+    """
+    s = str(encodings_val if encodings_val is not None else "").replace("\r", "")
+    su = s.upper()
+    if "HFKE" in su or "HKFE" in su:
+        return "f"
+    return "pe"
+
 
 CONFIG_PARAM_KEYS: list[str] = [
     "model",
     "dataset",
     "transforms",
+    "model.params.total",
     "transforms.CombinedPSEs.encodings",
     "transforms.CombinedFEs.encodings",
     # SANN sweeps (``scripts/sann.sh``): k-hop transform + backbone/complex dims.
     "transforms.sann_encoding.max_hop",
     "transforms.sann_encoding.complex_dim",
     "transforms.sann_encoding.max_rank",
-    # HOPSE_G / GPSE (``scripts/hopse_g.sh``): without ``pretrain_model``, molpcba vs zinc
+    # HOPSE-GPSE / ``hopse_g`` (``scripts/hopse_g.sh``): without ``pretrain_model``, molpcba vs zinc
     # runs merge in seed aggregation (2 checkpoints × 5 seeds → ``n_seeds==10``).
     "transforms.hopse_encoding.pretrain_model",
     "transforms.hopse_encoding.neighborhoods",
@@ -64,7 +136,7 @@ CONFIG_PARAM_KEYS: list[str] = [
     "model.feature_encoder.selected_dimensions",
     "model.backbone.complex_dim",
     "model.preprocessing_params.neighborhoods",
-    "model.preprocessing_params.encodings",
+    MODEL_PREPROC_ENCODINGS,
     "model.backbone.neighborhoods",
     "model.backbone.num_layers",
     "model.backbone.n_layers",
@@ -97,6 +169,7 @@ SUMMARY_COLUMN_PREFIX = "summary_"
 # e.g. torch_geometric GAT: range(num_layers - 2).
 HYDRA_WHOLE_NUMBER_OVERRIDE_KEYS: frozenset[str] = frozenset(
     {
+        "model.params.total",
         "model.backbone.num_layers",
         "model.backbone.n_layers",
         "model.backbone.GNN.num_layers",
@@ -120,7 +193,7 @@ HYDRA_JSON_LIST_TO_BRACKET_KEYS: frozenset[str] = frozenset(
         "transforms.CombinedPSEs.encodings",
         "transforms.CombinedFEs.encodings",
         "model.preprocessing_params.neighborhoods",
-        "model.preprocessing_params.encodings",
+        MODEL_PREPROC_ENCODINGS,
         "transforms.hopse_encoding.neighborhoods",
         "model.backbone.neighborhoods",
         "model.feature_encoder.selected_dimensions",
@@ -150,6 +223,27 @@ def hydra_dataset_key_from_loader_identity(identity: str) -> str:
     if not ident:
         return ident
     return DATASET_LOADER_IDENTITY_TO_HYDRA.get(ident, ident)
+
+
+# MANTRA Betti: W&B monitor is ``loss`` (min on val for model selection) but reporting uses
+# per-beta **test F1** for ``f1-1`` / ``f1-2`` only (``f1-0`` is omitted — saturated). Collapse /
+# tables / plots use synthetic dataset keys ``simplicial/mantra_betti_numbers#f1-1`` (etc.).
+MANTRA_BETTI_HYDRA_DATASET = "simplicial/mantra_betti_numbers"
+MANTRA_BETTI_F1_TAILS: tuple[str, ...] = ("f1-1", "f1-2")
+
+
+def mantra_betti_strip_metric_suffix(dataset_with_optional_suffix: str) -> str:
+    """``simplicial/mantra_betti_numbers#f1-1`` → ``simplicial/mantra_betti_numbers``."""
+    s = str(dataset_with_optional_suffix).replace("\r", "").strip()
+    if "#" in s:
+        return s.split("#", 1)[0].strip()
+    return s
+
+
+def is_mantra_betti_hydra_dataset(dataset_raw_or_synthetic: str) -> bool:
+    """True for MANTRA Betti rows / column keys (with or without ``#f1-*`` suffix)."""
+    base = mantra_betti_strip_metric_suffix(dataset_raw_or_synthetic)
+    return hydra_dataset_key_from_loader_identity(base) == MANTRA_BETTI_HYDRA_DATASET
 
 
 # -----------------------------------------------------------------------------
@@ -254,6 +348,11 @@ def get_from_flat(flat: Mapping[str, Any], dotted: str) -> Any:
     slashy = dotted.replace(".", "/")
     if slashy in flat:
         return flat[slashy]
+    # W&B often nests keys logged with ``/`` (e.g. ``AvgTime/train_epoch_mean``) as
+    # ``{"AvgTime": {"train_epoch_mean": ...}}`` → ``flatten_config`` → ``AvgTime.train_epoch_mean``.
+    dotty = dotted.replace("/", ".")
+    if dotty in flat and dotty != dotted:
+        return flat[dotty]
     return ""
 
 
@@ -342,6 +441,54 @@ def iter_runs(api, entity: str, project: str, *, state: str | None):
     return run_with_wandb_retry(_list, label=f"W&B list runs {path}")
 
 
+def _merge_wandb_timing_into_export_row(row: dict[str, Any], run) -> dict[str, Any]:
+    """
+    Add ``summary_AvgTime/train_epoch_*`` (from run config / summary) and
+    ``summary_Runtime`` (W&B wall seconds, usually ``run.summary['_runtime']``).
+
+    Matches ``process_reruns.augment_run_row_wandb_timing`` so ``main_loader`` exports
+    are ready for seed aggregation without a second W&B pass.
+    """
+    out = dict(row)
+    flat_cfg = flatten_config(dict(run.config or {}))
+
+    for key in ("AvgTime/train_epoch_mean", "AvgTime/train_epoch_std"):
+        v = get_from_flat(flat_cfg, key)
+        if v is None or v == "":
+            continue
+        cell = _serialize_cell(v)
+        if cell:
+            out[f"{SUMMARY_COLUMN_PREFIX}{key}"] = cell
+
+    try:
+        summary = dict(run.summary) if run.summary is not None else {}
+    except Exception:
+        summary = {}
+
+    for key in ("AvgTime/train_epoch_mean", "AvgTime/train_epoch_std"):
+        col = f"{SUMMARY_COLUMN_PREFIX}{key}"
+        if col in out and str(out[col]).strip():
+            continue
+        if key in summary:
+            out[col] = _serialize_cell(summary[key])
+
+    wall = None
+    for wb_key in ("_runtime", "Runtime", "runtime"):
+        if wb_key in summary:
+            wall = summary[wb_key]
+            break
+    if wall is None:
+        v = get_from_flat(flat_cfg, "_runtime")
+        if v not in (None, ""):
+            wall = v
+    if wall is not None:
+        ser = _serialize_cell(wall)
+        # Match ``summary_to_prefixed_row`` for W&B key ``_runtime`` → ``summary__runtime``.
+        out[f"{SUMMARY_COLUMN_PREFIX}_runtime"] = ser
+
+    return out
+
+
 def run_to_row(
     *,
     entity: str,
@@ -361,7 +508,8 @@ def run_to_row(
     params = extract_config_params(flat)
     summ = summary_to_prefixed_row(dict(run.summary))
 
-    return {**meta, **params, **summ}
+    base = {**meta, **params, **summ}
+    return _merge_wandb_timing_into_export_row(base, run)
 
 
 def collect_all_runs(
@@ -440,9 +588,109 @@ def is_seed_aggregatable_summary_column(name: str) -> bool:
     return False
 
 
+def is_timing_summary_column(name: str) -> bool:
+    """Per-epoch averages and wall runtime (seconds), for seed aggregation."""
+    if not name.startswith(SUMMARY_COLUMN_PREFIX):
+        return False
+    tail = name[len(SUMMARY_COLUMN_PREFIX) :]
+    if tail.startswith("AvgTime/"):
+        return True
+    tl = str(tail).lower()
+    # W&B ``_runtime`` → CSV ``summary__runtime``; merged export may use ``summary_Runtime``.
+    if tl in ("runtime", "_runtime") or tl.endswith("runtime"):
+        return True
+    return False
+
+
+def coalesce_seed_agg_wall_runtime_mean_std(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    """
+    Wall-clock training seconds from a seed-aggregated export (``...__mean`` / ``...__std``).
+
+    The same run duration may appear as ``summary_Runtime`` (capital R) or as
+    ``summary__runtime`` (W&B ``_runtime`` flattened with a double underscore). Exports
+    often contain **both** columns; one can be all-NaN for some models while the other is
+    populated. For each row, use the first finite mean (and matching std), then fill from
+    the other column where still missing.
+    """
+    mean_out = pd.Series(np.nan, index=df.index, dtype=float)
+    std_out = pd.Series(np.nan, index=df.index, dtype=float)
+    for base in (f"{SUMMARY_COLUMN_PREFIX}Runtime", f"{SUMMARY_COLUMN_PREFIX}_runtime"):
+        mcol = f"{base}__mean"
+        scol = f"{base}__std"
+        if mcol not in df.columns:
+            continue
+        vm = pd.to_numeric(df[mcol], errors="coerce")
+        vs = (
+            pd.to_numeric(df[scol], errors="coerce")
+            if scol in df.columns
+            else pd.Series(np.nan, index=df.index, dtype=float)
+        )
+        take = mean_out.isna() & vm.notna()
+        mean_out = mean_out.where(~take, vm)
+        std_out = std_out.where(~take, vs)
+    return mean_out, std_out
+
+
 def list_seed_aggregatable_summary_columns(df: pd.DataFrame) -> list[str]:
-    cols = [c for c in df.columns if is_seed_aggregatable_summary_column(c)]
-    return sorted(cols)
+    metric_cols = [c for c in df.columns if is_seed_aggregatable_summary_column(c)]
+    timing_cols = [c for c in df.columns if is_timing_summary_column(c)]
+    return sorted(set(metric_cols) | set(timing_cols))
+
+
+TEST_BEST_RERUN_SUMMARY_PREFIX = f"{SUMMARY_COLUMN_PREFIX}test_best_rerun/"
+
+
+def list_test_best_rerun_summary_columns(df: pd.DataFrame) -> list[str]:
+    """Columns of the per-run export under ``summary_test_best_rerun/`` (logged rerun metrics)."""
+    return sorted(c for c in df.columns if c.startswith(TEST_BEST_RERUN_SUMMARY_PREFIX))
+
+
+def drop_raw_runs_missing_all_test_best_rerun_metrics(
+    df: pd.DataFrame,
+    *,
+    model_col: str = "model",
+    dataset_col: str = "dataset",
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Drop rows where **no** ``summary_test_best_rerun/*`` value parses as a finite number
+    (empty CSV cells / silent failures: run finished but no rerun metrics).
+
+    If the export has no ``summary_test_best_rerun/*`` columns, nothing is dropped.
+
+    Returns ``(kept_df, silent_counts)`` with ``silent_counts`` columns
+    ``model``, ``dataset``, ``n_silent_failures``.
+    """
+    empty_silent = pd.DataFrame(columns=[model_col, dataset_col, "n_silent_failures"])
+    cols = list_test_best_rerun_summary_columns(df)
+    if not cols:
+        return df.copy().reset_index(drop=True), empty_silent.copy()
+
+    numeric = df[cols].apply(pd.to_numeric, errors="coerce")
+    has_any = numeric.notna().any(axis=1)
+    bad = ~has_any
+    n_bad = int(bad.sum())
+    if n_bad == 0:
+        return df.copy().reset_index(drop=True), empty_silent.copy()
+
+    if model_col not in df.columns or dataset_col not in df.columns:
+        silent = pd.DataFrame(
+            {
+                model_col: ["(missing columns)"],
+                dataset_col: ["(missing columns)"],
+                "n_silent_failures": [n_bad],
+            }
+        )
+    else:
+        silent = (
+            df.loc[bad, [model_col, dataset_col]]
+            .groupby([model_col, dataset_col], dropna=False)
+            .size()
+            .rename("n_silent_failures")
+            .reset_index()
+        )
+
+    kept = df.loc[~bad].copy().reset_index(drop=True)
+    return kept, silent
 
 
 def hyperparam_groupby_columns(df: pd.DataFrame) -> list[str]:
@@ -464,10 +712,14 @@ def aggregate_wandb_export_by_seed(
     *,
     seed_column: str = SEED_COLUMN,
     summary_metric_columns: list[str] | None = None,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     One row per hyperparameter setting (everything equal except identifiers,
     summary columns, and ``seed_column``).
+
+    Raw rows with **no** finite ``summary_test_best_rerun/*`` values are dropped
+    first (silent failures); the second return value counts them by
+    ``(model, dataset)`` (columns ``model``, ``dataset``, ``n_silent_failures``).
 
     For each group, ``n_seeds`` is the run count. Selected summary metrics
     (train/..., val/..., test_best_rerun/...) get ``<col>__mean`` and
@@ -478,6 +730,8 @@ def aggregate_wandb_export_by_seed(
 
     All raw ``summary_*`` columns are dropped from the output; identifier and
     seed columns are dropped. Non-aggregated context (e.g. wandb_entity) is kept.
+
+    Returns ``(aggregated_df, silent_failure_counts)``.
     """
     missing = [c for c in (seed_column,) if c not in df.columns]
     if missing:
@@ -486,6 +740,8 @@ def aggregate_wandb_export_by_seed(
     df = df.copy()
     if MONITOR_METRIC_COLUMN not in df.columns:
         df[MONITOR_METRIC_COLUMN] = ""
+
+    df, silent_failures = drop_raw_runs_missing_all_test_best_rerun_metrics(df)
 
     group_cols = hyperparam_groupby_columns(df)
     if summary_metric_columns is None:
@@ -521,7 +777,7 @@ def aggregate_wandb_export_by_seed(
 
     ordered = group_cols + ["n_seeds"] + tail
     out = out[[c for c in ordered if c in out.columns]]
-    return out
+    return out, silent_failures
 
 
 def build_seed_bucket_report(
@@ -583,11 +839,13 @@ def aggregate_wandb_export_csv(
     Load export CSV, aggregate by seed, optionally keep only groups with an
     exact run count, write ``output_path``.
 
-    Returns ``(written_frame, seed_bucket_report)`` where the report is built
-    from the aggregate **before** filtering on ``required_n_seeds``.
+    Returns ``(written_frame, seed_bucket_report, silent_failure_counts)`` where
+    the report is built from the aggregate **before** filtering on
+    ``required_n_seeds``. ``silent_failure_counts`` is the per-(model, dataset)
+    count of raw rows dropped for missing all ``summary_test_best_rerun/*`` values.
     """
     df = load_wandb_export_csv(input_path)
-    agg = aggregate_wandb_export_by_seed(df, summary_metric_columns=summary_metric_columns)
+    agg, silent = aggregate_wandb_export_by_seed(df, summary_metric_columns=summary_metric_columns)
     report = build_seed_bucket_report(agg)
     if required_n_seeds is not None:
         agg = filter_aggregated_to_required_n_seeds(agg, required_n_seeds)
@@ -595,7 +853,7 @@ def aggregate_wandb_export_csv(
     out_p = Path(output_path)
     out_p.parent.mkdir(parents=True, exist_ok=True)
     agg.to_csv(out_p, index=False)
-    return agg, report
+    return agg, report, silent
 
 
 def _union_column_order(frames: list[pd.DataFrame]) -> list[str]:
@@ -628,28 +886,45 @@ def aggregate_many_wandb_export_csvs(
     The seed bucket report is computed on the **concatenated** unfiltered
     aggregate (same keys as a single monolithic export).
 
-    Returns ``(written_frame, seed_bucket_report)``.
+    Returns ``(written_frame, seed_bucket_report, silent_failure_counts)``.
+    ``silent_failure_counts`` sums dropped raw runs across shards per (model, dataset).
     """
     paths = [Path(p) for p in input_paths]
     if not paths:
         raise ValueError("aggregate_many_wandb_export_csvs: no input paths")
 
     frames: list[pd.DataFrame] = []
+    silent_parts: list[pd.DataFrame] = []
     for p in paths:
         df = load_wandb_export_csv(p)
-        frames.append(aggregate_wandb_export_by_seed(df, summary_metric_columns=summary_metric_columns))
+        agg_i, silent_i = aggregate_wandb_export_by_seed(
+            df, summary_metric_columns=summary_metric_columns
+        )
+        frames.append(agg_i)
+        silent_parts.append(silent_i)
 
     cols = _union_column_order(frames)
     out = pd.concat(frames, ignore_index=True, sort=False)
     out = out.reindex(columns=cols)
     report = build_seed_bucket_report(out)
+
+    silent_concat = pd.concat(silent_parts, ignore_index=True, sort=False)
+    if silent_concat.empty:
+        silent = pd.DataFrame(columns=["model", "dataset", "n_silent_failures"])
+    else:
+        silent = (
+            silent_concat.groupby(["model", "dataset"], dropna=False)["n_silent_failures"]
+            .sum()
+            .reset_index()
+        )
+
     if required_n_seeds is not None:
         out = filter_aggregated_to_required_n_seeds(out, required_n_seeds)
     out = out.fillna("")
     out_p = Path(output_path)
     out_p.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(out_p, index=False)
-    return out, report
+    return out, report, silent
 
 
 # -----------------------------------------------------------------------------
@@ -887,6 +1162,8 @@ def hydra_overrides_from_aggregated_row(
             continue
         if key == "dataset":
             s = hydra_dataset_key_from_loader_identity(s)
+            if "#" in s:
+                s = mantra_betti_strip_metric_suffix(s)
         if key in HYDRA_JSON_LIST_TO_BRACKET_KEYS:
             s = normalize_json_list_string_for_hydra_cli(s)
         s = _coerce_whole_number_override(key, s)
@@ -904,6 +1181,13 @@ def collapse_aggregated_wandb_by_best_val(
     From a **seed-aggregated** export (``...__mean`` / ``...__std`` columns), keep one
     row per ``group_cols`` by picking the hyperparameter row with the best **validation**
     mean for the dataset's monitored metric.
+
+    **MANTRA Betti numbers** (``simplicial/mantra_betti_numbers``): selection still uses
+    the monitored metric (typically **loss**, minimize on val). The collapsed table then
+    emits **two** rows per group (``f1-1``, ``f1-2`` only) with synthetic ``dataset`` keys
+    ``simplicial/mantra_betti_numbers#f1-1`` / ``#f1-2``, ``monitor_column`` set to
+    ``val/f1-*``, and only the matching per-beta **train/val/test F1** block filled from
+    that same winning row.
 
     Output columns: ``group_cols``, ``monitor_column``, then a sparse wide block
     ``train_<metric>_mean``, ``train_<metric>_std``, ``val_<metric>_mean``,
@@ -930,6 +1214,12 @@ def collapse_aggregated_wandb_by_best_val(
         if t:
             tails_seen.add(t)
 
+    if "dataset" in work.columns:
+        for ds in work["dataset"].fillna("").astype(str).unique():
+            if is_mantra_betti_hydra_dataset(ds):
+                tails_seen.update(MANTRA_BETTI_F1_TAILS)
+                break
+
     tokens_sorted = sorted({safe_metric_col_token(t) for t in tails_seen})
     metric_block_cols: list[str] = []
     for tok in tokens_sorted:
@@ -946,39 +1236,57 @@ def collapse_aggregated_wandb_by_best_val(
 
     out_rows: list[dict[str, Any]] = []
 
+    def _fill_metric_block_from_winner(
+        row_out: dict[str, Any], winner_series: pd.Series, metric_tail: str
+    ) -> None:
+        m_tok = safe_metric_col_token(metric_tail)
+        train_src = _first_existing_column(_train_mean_columns_for_tail(metric_tail), colset)
+        val_src_w = _first_existing_column(_val_mean_columns_for_tail(metric_tail), colset)
+        test_src = _first_existing_column(_test_mean_columns_for_tail(metric_tail), colset)
+        if train_src:
+            row_out[f"train_{m_tok}_mean"] = winner_series.get(train_src, "")
+            tr_std = _paired_std_from_mean(train_src, colset)
+            if tr_std:
+                row_out[f"train_{m_tok}_std"] = winner_series.get(tr_std, "")
+        if val_src_w:
+            row_out[f"val_{m_tok}_mean"] = winner_series.get(val_src_w, "")
+            va_std = _paired_std_from_mean(val_src_w, colset)
+            if va_std:
+                row_out[f"val_{m_tok}_std"] = winner_series.get(va_std, "")
+        if test_src:
+            row_out[f"test_{m_tok}_mean"] = winner_series.get(test_src, "")
+            te_std = _paired_std_from_mean(test_src, colset)
+            if te_std:
+                row_out[f"test_{m_tok}_std"] = winner_series.get(te_std, "")
+
     for keys, pick_idx, monitor_val, tail in iter_best_val_group_picks(
         work, group_cols=group_cols, monitor_column=monitor_column
     ):
+        zd = dict(zip(group_cols, keys, strict=True))
+        winner = work.loc[pick_idx]
+        ds_raw = str(zd.get("dataset", "")) if "dataset" in zd else ""
+        mantra_split = "dataset" in group_cols and is_mantra_betti_hydra_dataset(ds_raw)
+
+        if mantra_split:
+            for fi_tail in MANTRA_BETTI_F1_TAILS:
+                base_row = dict(zip(group_cols, keys, strict=True))
+                base_row["dataset"] = f"{MANTRA_BETTI_HYDRA_DATASET}#{fi_tail}"
+                base_row[monitor_column] = f"val/{fi_tail}"
+                for c in metric_block_cols:
+                    base_row[c] = ""
+                _fill_metric_block_from_winner(base_row, winner, fi_tail)
+                out_rows.append(base_row)
+            continue
+
         base_row = dict(zip(group_cols, keys, strict=True))
-        tok = safe_metric_col_token(tail) if tail else "unknown"
 
         base_row[monitor_column] = monitor_val
 
         for c in metric_block_cols:
             base_row[c] = ""
 
-        winner = work.loc[pick_idx]
-
         if tail:
-            train_src = _first_existing_column(_train_mean_columns_for_tail(tail), colset)
-            val_src_w = _first_existing_column(_val_mean_columns_for_tail(tail), colset)
-            test_src = _first_existing_column(_test_mean_columns_for_tail(tail), colset)
-
-            if train_src:
-                base_row[f"train_{tok}_mean"] = winner.get(train_src, "")
-                tr_std = _paired_std_from_mean(train_src, colset)
-                if tr_std:
-                    base_row[f"train_{tok}_std"] = winner.get(tr_std, "")
-            if val_src_w:
-                base_row[f"val_{tok}_mean"] = winner.get(val_src_w, "")
-                va_std = _paired_std_from_mean(val_src_w, colset)
-                if va_std:
-                    base_row[f"val_{tok}_std"] = winner.get(va_std, "")
-            if test_src:
-                base_row[f"test_{tok}_mean"] = winner.get(test_src, "")
-                te_std = _paired_std_from_mean(test_src, colset)
-                if te_std:
-                    base_row[f"test_{tok}_std"] = winner.get(te_std, "")
+            _fill_metric_block_from_winner(base_row, winner, tail)
 
         out_rows.append(base_row)
 

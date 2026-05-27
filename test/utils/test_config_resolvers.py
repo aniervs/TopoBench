@@ -3,6 +3,8 @@
 import pytest
 from omegaconf import OmegaConf
 import hydra
+import torch
+import os
 from topobench.utils.config_resolvers import (
     define_task_level,
     infer_in_channels,
@@ -22,6 +24,12 @@ from topobench.utils.config_resolvers import (
     check_fes_in_transforms,
     get_fes_dimensions,
     get_all_encoding_dimensions,
+    get_pse_dimensions,
+    get_routes_from_neighborhoods,
+    infer_list_length,
+    infer_list_length_plus_one,
+    get_list_element,
+    infer_in_hasse_graph_agg_dim,
 )
 
 class TestConfigResolvers:
@@ -58,6 +66,14 @@ class TestConfigResolvers:
 
         out = get_default_metrics("regression", 1)
         assert out == ["mse", "mae"]
+        
+        # Test for multioutput and multilabel classification
+        out = get_default_metrics("multioutput classification", 2)
+        expected = ["accuracy-0", "precision-0", "recall-0", "f1-0", "accuracy-1", "precision-1", "recall-1", "f1-1"]
+        assert out == expected
+        
+        out = get_default_metrics("multilabel classification", 2)
+        assert out == expected
 
         with pytest.raises(ValueError, match="Invalid task") as e:
             get_default_metrics("some_task", 2)
@@ -111,6 +127,9 @@ class TestConfigResolvers:
         """Test get_monitor_metric."""
         out = get_monitor_metric("classification", "F1")
         assert out == "val/F1"
+        
+        assert get_monitor_metric("multioutput classification", "accuracy") == "val/accuracy"
+        assert get_monitor_metric("multilabel classification", "f1") == "val/f1"
 
         with pytest.raises(ValueError, match="Invalid task") as e:
             get_monitor_metric("mix", "F1")
@@ -122,6 +141,9 @@ class TestConfigResolvers:
 
         out = get_monitor_mode("classification")
         assert out == "max"
+        
+        assert get_monitor_mode("multilabel classification") == "max"
+        assert get_monitor_mode("multioutput classification") == "min"
 
         with pytest.raises(ValueError, match="Invalid task") as e:
             get_monitor_mode("mix")
@@ -857,12 +879,73 @@ class TestConfigResolvers:
             }
         )
         assert check_fes_in_transforms(transforms) == 11
+        
+    def test_check_fes_in_transforms_hkfe(self):
+        """Test check_fes_in_transforms with HKFE."""
+        transforms = OmegaConf.create({
+            "transform_name": "HKFE",
+            "kernel_param_HKFE": [1, 5]
+        })
+        assert check_fes_in_transforms(transforms) == 4
+        
+        transforms = OmegaConf.create({
+            "transform_name": "HKFE",
+            "kernel_param_HKFE": 3
+        })
+        assert check_fes_in_transforms(transforms) == 3
+        
+        transforms = OmegaConf.create({
+            "CombinedFEs": {
+                "encodings": ["HKFE"],
+                "parameters": {
+                    "HKFE": {"kernel_param_HKFE": [2, 7]}
+                }
+            }
+        })
+        assert check_fes_in_transforms(transforms) == 5
+        
+        transforms = OmegaConf.create({
+            "HKFE_extra": {"kernel_param_HKFE": [0, 10]}
+        })
+        assert check_fes_in_transforms(transforms) == 10
+
+    def test_check_fes_in_transforms_khopfe(self):
+        """Test check_fes_in_transforms with KHopFE."""
+        transforms = OmegaConf.create({
+            "transform_name": "KHopFE",
+            "max_hop": 5
+        })
+        assert check_fes_in_transforms(transforms) == 4
+        
+        transforms = OmegaConf.create({
+            "CombinedFEs": {
+                "encodings": ["KHopFE"],
+                "parameters": {
+                    "KHopFE": {"max_hop": 3}
+                }
+            }
+        })
+        assert check_fes_in_transforms(transforms) == 2
+        
+        transforms = OmegaConf.create({
+            "KHopFE_extra": {"max_hop": 6}
+        })
+        assert check_fes_in_transforms(transforms) == 5
 
     def test_get_fes_dimensions_khopfe(self):
         """Test get_fes_dimensions with KHopFE using max_hop - 1."""
         encodings = ["KHopFE"]
         parameters = {"KHopFE": {"max_hop": 5}}
         assert get_fes_dimensions(encodings, parameters) == [4]
+        
+    def test_get_fes_dimensions_hkfe(self):
+        """Test get_fes_dimensions with HKFE."""
+        encodings = ["HKFE"]
+        parameters = {"HKFE": {"kernel_param_HKFE": [1, 5]}}
+        assert get_fes_dimensions(encodings, parameters) == [4]
+        
+        parameters = {"HKFE": {"kernel_param_HKFE": 3}}
+        assert get_fes_dimensions(encodings, parameters) == [3]
 
     def test_get_fes_dimensions_pprfe_list_tuple(self):
         """Test get_fes_dimensions with PPRFE alpha as tuple returning second element."""
@@ -912,6 +995,30 @@ class TestConfigResolvers:
     def test_get_all_encoding_dimensions_pprfe_missing_uses_default(self):
         """Test get_all_encoding_dimensions with PPRFE absent from parameters using default 10."""
         assert get_all_encoding_dimensions(["PPRFE"], {}) == [10]
+        
+    def test_get_all_encoding_dimensions_exhaustive(self):
+        """Test get_all_encoding_dimensions for all supported encodings."""
+        encodings = ["LapPE", "RWSE", "ElectrostaticPE", "HKdiagSE", "HKFE", "KHopFE", "PPRFE", "SheafConnLapPE"]
+        parameters = {
+            "LapPE": {"max_pe_dim": 8, "include_eigenvalues": True},
+            "RWSE": {"max_pe_dim": 4},
+            "ElectrostaticPE": {},
+            "HKdiagSE": {"kernel_param_HKdiagSE": [1, 5]},
+            "HKFE": {"kernel_param_HKFE": [2, 8]},
+            "KHopFE": {"max_hop": 3},
+            "PPRFE": {"alpha_param_PPRFE": [0.1, 7]},
+            "SheafConnLapPE": {"max_pe_dim": 5}
+        }
+        expected = [16, 4, 7, 4, 6, 2, 7, 5]
+        assert get_all_encoding_dimensions(encodings, parameters) == expected
+        
+        # Test scalar params
+        parameters["HKdiagSE"]["kernel_param_HKdiagSE"] = 10
+        parameters["HKFE"]["kernel_param_HKFE"] = 12
+        parameters["PPRFE"]["alpha_param_PPRFE"] = 15
+        parameters["LapPE"]["include_eigenvalues"] = False
+        expected = [8, 4, 7, 10, 12, 2, 15, 5]
+        assert get_all_encoding_dimensions(encodings, parameters) == expected
 
 
 class TestNewHopseResolvers:
@@ -919,18 +1026,11 @@ class TestNewHopseResolvers:
 
     def setup_method(self):
         """Setup method."""
-        import hydra
-        from omegaconf import OmegaConf  # noqa: F401
-
         hydra.core.global_hydra.GlobalHydra.instance().clear()
 
     # ---- get_routes_from_neighborhoods ----
 
     def test_get_routes_from_neighborhoods_basic(self):
-        from topobench.utils.config_resolvers import (
-            get_routes_from_neighborhoods,
-        )
-
         nbhds = [
             "up_adjacency-0",
             "up_incidence-0",
@@ -941,10 +1041,6 @@ class TestNewHopseResolvers:
         assert routes == [[0, 0], [0, 1], [1, 0], [0, 2]]
 
     def test_get_routes_from_neighborhoods_rejects_unknown(self):
-        from topobench.utils.config_resolvers import (
-            get_routes_from_neighborhoods,
-        )
-
         with pytest.raises(Exception, match="Invalid neighborhood"):
             get_routes_from_neighborhoods(["something_weird-0"])
 
@@ -980,29 +1076,19 @@ class TestNewHopseResolvers:
     def test_get_pse_dimensions_parametrized(
         self, encodings, parameters, expected
     ):
-        from topobench.utils.config_resolvers import get_pse_dimensions
-
         assert get_pse_dimensions(encodings, parameters) == expected
 
     # ---- infer_list_length / +1 / get_list_element ----
 
     def test_infer_list_length(self):
-        from topobench.utils.config_resolvers import infer_list_length
-
         assert infer_list_length([]) == 0
         assert infer_list_length([1, 2, 3]) == 3
 
     def test_infer_list_length_plus_one(self):
-        from topobench.utils.config_resolvers import (
-            infer_list_length_plus_one,
-        )
-
         assert infer_list_length_plus_one([]) == 1
         assert infer_list_length_plus_one([10, 20]) == 3
 
     def test_get_list_element(self):
-        from topobench.utils.config_resolvers import get_list_element
-
         assert get_list_element([10, 20, 30], 0) == 10
         assert get_list_element([10, 20, 30], -1) == 30
         with pytest.raises(IndexError):
@@ -1011,10 +1097,6 @@ class TestNewHopseResolvers:
     # ---- infer_in_hasse_graph_agg_dim ----
 
     def test_infer_in_hasse_graph_agg_dim_copy_initial_scalar_dim_in(self):
-        from topobench.utils.config_resolvers import (
-            infer_in_hasse_graph_agg_dim,
-        )
-
         out = infer_in_hasse_graph_agg_dim(
             neighborhoods=["up_adjacency-0", "up_incidence-0"],
             dim_pses=[5, 7],
@@ -1034,10 +1116,6 @@ class TestNewHopseResolvers:
         assert out[1][0] == 4
 
     def test_infer_in_hasse_graph_agg_dim_with_edge_attr(self):
-        from topobench.utils.config_resolvers import (
-            infer_in_hasse_graph_agg_dim,
-        )
-
         out = infer_in_hasse_graph_agg_dim(
             neighborhoods=["up_adjacency-0"],
             dim_pses=[5],
@@ -1054,10 +1132,6 @@ class TestNewHopseResolvers:
         assert out[1][0] == 9
 
     def test_infer_in_hasse_graph_agg_dim_no_copy_initial(self):
-        from topobench.utils.config_resolvers import (
-            infer_in_hasse_graph_agg_dim,
-        )
-
         out = infer_in_hasse_graph_agg_dim(
             neighborhoods=["up_adjacency-0"],
             dim_pses=[5],

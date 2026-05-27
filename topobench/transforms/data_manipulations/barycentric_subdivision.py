@@ -62,23 +62,16 @@ class BarycentricSubdivisionTransform(
         )
 
         # Get rid of the old keys
-        for key, _ in data:
+        for key in list(data.keys()):
             if key not in keys_to_keep:
-                # if key in lifted_topology:
-                #
-                # assert torch.equal(
-                #     data[key].indices(), lifted_topology[key].indices()
-                # ), (
-                #     f"Key {key} has different indices in data and lifted topology, although should be the same regardless sign True/False"
-                # )
                 data.pop(key)
 
         # Assign new topology
         for key in lifted_topology:
             data[key] = lifted_topology[key]
 
-        zero_cells, one_cells = data.incidence_1.shape
-        two_cells, three_cells = data.incidence_3.shape
+        # Use shape from lifted_topology to get cell counts
+        zero_cells, one_cells, two_cells, three_cells = lifted_topology["shape"]
 
         data["shape"] = torch.tensor(
             [zero_cells, one_cells, two_cells, three_cells]

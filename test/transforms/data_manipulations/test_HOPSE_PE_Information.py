@@ -9,6 +9,7 @@ from topobench.transforms.data_manipulations.hopse_ps_information import (
     dotdict,
     interrank_boundary_index,
 )
+from topobench.data.utils.utils import load_manual_simplicial_complex
 
 
 def _base_kwargs(**overrides):
@@ -18,7 +19,8 @@ def _base_kwargs(**overrides):
         "copy_initial": True,
         "neighborhoods": ["up_laplacian_0"],
         "encodings": [],  # empty -> no PSE/FE transforms to construct
-        "in_channels": [[4], [4], [4]],
+        "parameters": {"RWSE": {"max_pe_dim": 4, "concat_to_x": False}},
+        "in_channels": {0: [4], 1: [4], 2: [4]},
         "device": "cpu",
         "cuda": [0],
         "dim_target_node": 8,
@@ -131,6 +133,104 @@ class TestHOPSEPEInformationInit:
         out = t.aggregate_inter_nbhd(x_out_per_route)
         assert 0 in out
         assert out[0].LapPE.shape == (3, 2 + 4 + 1)
+
+
+class TestHOPSEPEInformationForward:
+    """Functional tests for the forward method."""
+
+    def test_forward_basic(self):
+        data = load_manual_simplicial_complex()
+        data["adjacency-0"] = data.adjacency_0
+        data["down_incidence-1"] = data.incidence_1
+
+        kwargs = _base_kwargs(
+            neighborhoods=["adjacency-0", "down_incidence-1"],
+            encodings=["RWSE"],
+            parameters={"RWSE": {"max_pe_dim": 4, "concat_to_x": False}},
+            in_channels={0: [2, 8], 1: [2, 4], 2: [2, 4]},
+            dim_all_encodings=[4],
+        )
+        transform = HOPSE_PE_Information(**kwargs)
+        out_data = transform(data)
+
+        assert hasattr(out_data, "x0_0")
+        assert hasattr(out_data, "x0_1")
+        assert out_data.x0_0.shape == (5, 2)
+        assert out_data.x0_1.shape == (5, 8)
+
+    def test_forward_no_copy_initial(self):
+        data = load_manual_simplicial_complex()
+        data["adjacency-0"] = data.adjacency_0
+
+        kwargs = _base_kwargs(
+            copy_initial=False,
+            neighborhoods=["adjacency-0"],
+            encodings=["RWSE"],
+            parameters={"RWSE": {"max_pe_dim": 4, "concat_to_x": False}},
+            in_channels={0: [4], 1: [4], 2: [4]},
+            dim_all_encodings=[4],
+        )
+        transform = HOPSE_PE_Information(**kwargs)
+        out_data = transform(data)
+
+        assert hasattr(out_data, "x0_0")
+        assert out_data.x0_0.shape == (5, 4)
+
+    def test_forward_empty_rank(self):
+        data = Data(
+            x_0=torch.randn(5, 2), x_1=torch.randn(0, 2), x_2=torch.randn(0, 2)
+        )
+        data["adjacency-0"] = torch.zeros((5, 5)).to_sparse()
+
+        kwargs = _base_kwargs(
+            neighborhoods=["adjacency-0"],
+            encodings=["RWSE"],
+            in_channels={0: [2, 4], 1: [2, 4], 2: [2, 4]},
+            dim_all_encodings=[4],
+        )
+        transform = HOPSE_PE_Information(**kwargs)
+        out_data = transform(data)
+
+        assert out_data.x1_1.shape == (0, 4)
+        assert out_data.x2_1.shape == (0, 4)
+
+    def test_forward_single_node(self):
+        data = Data(
+            x_0=torch.randn(1, 2), x_1=torch.randn(0, 2), x_2=torch.randn(0, 2)
+        )
+        data["adjacency-0"] = torch.zeros((1, 1)).to_sparse()
+
+        kwargs = _base_kwargs(
+            neighborhoods=["adjacency-0"],
+            encodings=["RWSE"],
+            in_channels={0: [2, 4], 1: [2, 4], 2: [2, 4]},
+            dim_all_encodings=[4],
+        )
+        transform = HOPSE_PE_Information(**kwargs)
+        out_data = transform(data)
+
+        assert out_data.x0_1.shape == (1, 4)
+        assert torch.all(out_data.x0_1 == 0.0)
+
+    def test_interrank_padding(self):
+        data = Data(x_0=torch.randn(5, 2), x_1=torch.randn(3, 4))
+        indices = torch.tensor([[0, 0, 1, 1, 2, 2], [0, 1, 1, 2, 2, 0]])
+        data["down_incidence-1"] = torch.sparse_coo_tensor(
+            indices, torch.ones(6), (5, 3)
+        )
+
+        kwargs = _base_kwargs(
+            max_rank=1,
+            neighborhoods=["down_incidence-1"],
+            encodings=["RWSE"],
+            in_channels={0: [2, 4], 1: [4, 4]},
+            dim_all_encodings=[4],
+        )
+        transform = HOPSE_PE_Information(**kwargs)
+        out_data = transform(data)
+
+        assert hasattr(out_data, "x0_1")
+        assert out_data.x0_1.shape == (5, 4)
 
 
 def test_init_requires_encodings_supported_when_nonempty():

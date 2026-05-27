@@ -556,7 +556,7 @@ class TestKFoldSplitFixed:
 
         # Test creating the split
         split_idx = k_fold_split_fixed(labels, parameters, split_idx_list)
-        
+
         assert np.array_equal(split_idx["train"], split_idx_list["train"][0])
         assert np.array_equal(split_idx["valid"], split_idx_list["valid"][0])
         assert np.array_equal(split_idx["test"], split_idx_list["test"][0])
@@ -583,22 +583,22 @@ class TestLoadTransductiveSplits:
         mock_dataset = MagicMock()
         mock_dataset.__len__ = MagicMock(return_value=1)
         mock_dataset.dataset.get_data_dir.return_value = self.test_dir
-        
+
         mock_data = MagicMock()
         mock_data.y = torch.tensor([0, 1, 0, 1, 0, 1], dtype=torch.float)
         mock_data.x = torch.randn(6, 10)
         mock_data.train_mask = None
         mock_dataset.data_list = [mock_data]
-        
+
         parameters = DictConfig({
             "split_type": "random",
             "data_seed": 0,
             "train_prop": 0.5,
             "data_split_dir": os.path.join(self.test_dir, "data_splits")
         })
-        
+
         dataset, _, _ = load_transductive_splits(mock_dataset, parameters)
-        
+
         assert len(dataset) == 1
         data = dataset.data_lst[0]
         assert hasattr(data, "train_mask")
@@ -609,19 +609,19 @@ class TestLoadTransductiveSplits:
         mock_dataset = MagicMock()
         mock_dataset.__len__ = MagicMock(return_value=1)
         mock_dataset.dataset.get_data_dir.return_value = self.test_dir
-        
+
         mock_data = MagicMock()
         mock_data.y = torch.tensor([0, 0, 0, 1, 1, 1], dtype=torch.float)
         mock_data.x = torch.randn(6, 10)
         mock_dataset.data_list = [mock_data]
-        
+
         parameters = DictConfig({
             "split_type": "stratified",
             "data_seed": 0,
             "train_prop": 0.5,
             "data_split_dir": os.path.join(self.test_dir, "data_splits")
         })
-        
+
         dataset, _, _ = load_transductive_splits(mock_dataset, parameters)
         assert len(dataset) == 1
 
@@ -630,19 +630,19 @@ class TestLoadTransductiveSplits:
         mock_dataset = MagicMock()
         mock_dataset.__len__ = MagicMock(return_value=1)
         mock_dataset.dataset.get_data_dir.return_value = self.test_dir
-        
+
         mock_data = MagicMock()
         mock_data.y = torch.tensor([0, 0, 0, 1, 1, 1], dtype=torch.float)
         mock_data.x = torch.randn(6, 10)
         mock_dataset.data_list = [mock_data]
-        
+
         parameters = DictConfig({
             "split_type": "k-fold",
             "k": 3,
             "data_seed": 0,
             "data_split_dir": os.path.join(self.test_dir, "data_splits")
         })
-        
+
         dataset, _, _ = load_transductive_splits(mock_dataset, parameters)
         assert len(dataset) == 1
 
@@ -651,13 +651,13 @@ class TestLoadTransductiveSplits:
         mock_dataset = MagicMock()
         mock_dataset.__len__ = MagicMock(return_value=1)
         mock_dataset.dataset.get_data_dir.return_value = self.test_dir
-        
+
         mock_data = MagicMock()
         # Use float labels for standardization test
         mock_data.y = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=torch.float)
         mock_data.x = torch.randn(6, 10)
         mock_dataset.data_list = [mock_data]
-        
+
         parameters = DictConfig({
             "split_type": "random",
             "data_seed": 0,
@@ -665,7 +665,7 @@ class TestLoadTransductiveSplits:
             "standardize": True,
             "data_split_dir": os.path.join(self.test_dir, "data_splits")
         })
-        
+
         dataset, _, _ = load_transductive_splits(mock_dataset, parameters)
         assert len(dataset) == 1
         data = dataset.data_lst[0]
@@ -680,11 +680,11 @@ class TestLoadTransductiveSplits:
         mock_data = MagicMock()
         mock_data.y = torch.tensor([0, 1], dtype=torch.float)
         mock_dataset.data_list = [mock_data]
-        
+
         parameters = DictConfig({
             "split_type": "invalid",
         })
-        
+
         with pytest.raises(NotImplementedError):
             load_transductive_splits(mock_dataset, parameters)
 
@@ -705,17 +705,17 @@ class TestLoadCoauthorshipHypergraphSplits:
         """Test loading coauthorship hypergraph splits."""
         data = MagicMock()
         data.num_nodes = 10
-        
+
         train_prop = 0.5
         parameters = DictConfig({
             "data_seed": 0,
             "data_split_dir": self.test_dir
         })
-        
+
         # Create the expected directory and file
         split_dir = os.path.join(self.test_dir, f"train_prop={train_prop}")
         os.makedirs(split_dir, exist_ok=True)
-        
+
         split_path = os.path.join(split_dir, "split_0.npz")
         split_idx = {
             "train": np.array([0, 1, 2, 3, 4]),
@@ -723,9 +723,9 @@ class TestLoadCoauthorshipHypergraphSplits:
             "test": np.array([8, 9])
         }
         np.savez(split_path, **split_idx)
-        
+
         dataset, _, _ = load_coauthorship_hypergraph_splits(data, parameters, train_prop=train_prop)
-        
+
         assert len(dataset) == 1
         assert torch.equal(data.train_mask, torch.from_numpy(split_idx["train"]))
 

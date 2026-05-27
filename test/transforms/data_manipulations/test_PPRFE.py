@@ -333,10 +333,10 @@ class TestPPRFE:
         """Test PPRFE with debug=True."""
         t = PPRFE(alpha_param_PPRFE=(0.1, 5), debug=True)
         data = Data(x=self.x, edge_index=self.edge_index, num_nodes=self.num_nodes)
-        
+
         # This should run without error and print debug info
         out = t(data)
-        
+
         captured = capsys.readouterr()
         # Verify that some debug information was printed
         assert "PPRFE Debug Report" in captured.out

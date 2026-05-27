@@ -39,7 +39,7 @@ class TestBarycentricSubdivisionTransform:
         assert "x" in out
         assert "y" in out
 
-        # Note: topobench.data.utils.utils.select_neighborhoods_of_interest 
+        # Note: topobench.data.utils.utils.select_neighborhoods_of_interest
         # always keeps keys that contain "incidence" and no hyphen.
         assert "incidence_0" in out
         assert "incidence_1" in out

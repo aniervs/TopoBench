@@ -71,7 +71,9 @@ class BarycentricSubdivisionTransform(
             data[key] = lifted_topology[key]
 
         # Use shape from lifted_topology to get cell counts
-        zero_cells, one_cells, two_cells, three_cells = lifted_topology["shape"]
+        zero_cells, one_cells, two_cells, three_cells = lifted_topology[
+            "shape"
+        ]
 
         data["shape"] = torch.tensor(
             [zero_cells, one_cells, two_cells, three_cells]

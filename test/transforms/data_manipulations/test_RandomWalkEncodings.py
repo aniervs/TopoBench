@@ -314,10 +314,10 @@ class TestRWSE:
         transform = RWSE(max_pe_dim=4, debug=True)
         edge_index = torch.tensor([[0, 1, 2], [1, 2, 0]])
         data = Data(edge_index=edge_index, num_nodes=3)
-        
+
         # This should run without error and print debug info
         transformed = transform(data)
-        
+
         captured = capsys.readouterr()
         # Verify that some debug information was printed
         assert "RWSE Debug Report" in captured.out or "method" in captured.out.lower()

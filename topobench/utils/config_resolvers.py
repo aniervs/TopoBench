@@ -651,15 +651,17 @@ def check_pses_in_transforms(transforms):
                 added_features += transforms[key].get("max_pe_dim") * 2
             else:
                 added_features += transforms[key].get("max_pe_dim")
-        elif ("RWSE" in key or "SheafConnLapPE" in key) and omegaconf.OmegaConf.is_dict(
-            transforms[key]
-        ):
+        elif (
+            "RWSE" in key or "SheafConnLapPE" in key
+        ) and omegaconf.OmegaConf.is_dict(transforms[key]):
             added_features += transforms[key].get("max_pe_dim")
         elif "ElectrostaticPE" in key and omegaconf.OmegaConf.is_dict(
             transforms[key]
         ):
             added_features += 7
-        elif "HKdiagSE" in key and omegaconf.OmegaConf.is_dict(transforms[key]):
+        elif "HKdiagSE" in key and omegaconf.OmegaConf.is_dict(
+            transforms[key]
+        ):
             kernel_param = transforms[key].get("kernel_param_HKdiagSE")
             added_features += (
                 (kernel_param[1] - kernel_param[0])

@@ -66,12 +66,12 @@ class TestConfigResolvers:
 
         out = get_default_metrics("regression", 1)
         assert out == ["mse", "mae"]
-        
+
         # Test for multioutput and multilabel classification
         out = get_default_metrics("multioutput classification", 2)
         expected = ["accuracy-0", "precision-0", "recall-0", "f1-0", "accuracy-1", "precision-1", "recall-1", "f1-1"]
         assert out == expected
-        
+
         out = get_default_metrics("multilabel classification", 2)
         assert out == expected
 
@@ -127,7 +127,7 @@ class TestConfigResolvers:
         """Test get_monitor_metric."""
         out = get_monitor_metric("classification", "F1")
         assert out == "val/F1"
-        
+
         assert get_monitor_metric("multioutput classification", "accuracy") == "val/accuracy"
         assert get_monitor_metric("multilabel classification", "f1") == "val/f1"
 
@@ -141,7 +141,7 @@ class TestConfigResolvers:
 
         out = get_monitor_mode("classification")
         assert out == "max"
-        
+
         assert get_monitor_mode("multilabel classification") == "max"
         assert get_monitor_mode("multioutput classification") == "min"
 
@@ -879,7 +879,7 @@ class TestConfigResolvers:
             }
         )
         assert check_fes_in_transforms(transforms) == 11
-        
+
     def test_check_fes_in_transforms_hkfe(self):
         """Test check_fes_in_transforms with HKFE."""
         transforms = OmegaConf.create({
@@ -887,13 +887,13 @@ class TestConfigResolvers:
             "kernel_param_HKFE": [1, 5]
         })
         assert check_fes_in_transforms(transforms) == 4
-        
+
         transforms = OmegaConf.create({
             "transform_name": "HKFE",
             "kernel_param_HKFE": 3
         })
         assert check_fes_in_transforms(transforms) == 3
-        
+
         transforms = OmegaConf.create({
             "CombinedFEs": {
                 "encodings": ["HKFE"],
@@ -903,7 +903,7 @@ class TestConfigResolvers:
             }
         })
         assert check_fes_in_transforms(transforms) == 5
-        
+
         transforms = OmegaConf.create({
             "HKFE_extra": {"kernel_param_HKFE": [0, 10]}
         })
@@ -916,7 +916,7 @@ class TestConfigResolvers:
             "max_hop": 5
         })
         assert check_fes_in_transforms(transforms) == 4
-        
+
         transforms = OmegaConf.create({
             "CombinedFEs": {
                 "encodings": ["KHopFE"],
@@ -926,7 +926,7 @@ class TestConfigResolvers:
             }
         })
         assert check_fes_in_transforms(transforms) == 2
-        
+
         transforms = OmegaConf.create({
             "KHopFE_extra": {"max_hop": 6}
         })
@@ -937,13 +937,13 @@ class TestConfigResolvers:
         encodings = ["KHopFE"]
         parameters = {"KHopFE": {"max_hop": 5}}
         assert get_fes_dimensions(encodings, parameters) == [4]
-        
+
     def test_get_fes_dimensions_hkfe(self):
         """Test get_fes_dimensions with HKFE."""
         encodings = ["HKFE"]
         parameters = {"HKFE": {"kernel_param_HKFE": [1, 5]}}
         assert get_fes_dimensions(encodings, parameters) == [4]
-        
+
         parameters = {"HKFE": {"kernel_param_HKFE": 3}}
         assert get_fes_dimensions(encodings, parameters) == [3]
 
@@ -995,7 +995,7 @@ class TestConfigResolvers:
     def test_get_all_encoding_dimensions_pprfe_missing_uses_default(self):
         """Test get_all_encoding_dimensions with PPRFE absent from parameters using default 10."""
         assert get_all_encoding_dimensions(["PPRFE"], {}) == [10]
-        
+
     def test_get_all_encoding_dimensions_exhaustive(self):
         """Test get_all_encoding_dimensions for all supported encodings."""
         encodings = ["LapPE", "RWSE", "ElectrostaticPE", "HKdiagSE", "HKFE", "KHopFE", "PPRFE", "SheafConnLapPE"]
@@ -1011,7 +1011,7 @@ class TestConfigResolvers:
         }
         expected = [16, 4, 7, 4, 6, 2, 7, 5]
         assert get_all_encoding_dimensions(encodings, parameters) == expected
-        
+
         # Test scalar params
         parameters["HKdiagSE"]["kernel_param_HKdiagSE"] = 10
         parameters["HKFE"]["kernel_param_HKFE"] = 12

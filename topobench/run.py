@@ -166,7 +166,7 @@ def run(cfg: DictConfig) -> tuple[dict[str, Any], dict[str, Any]]:
         callbacks=callbacks,
         logger=logger,
         num_sanity_val_steps=0,
-        log_every_n_steps=0,  # Avoid console logging
+        log_every_n_steps=1,  # Log metrics every step (Lightning requires >=1)
     )
 
     object_dict = {

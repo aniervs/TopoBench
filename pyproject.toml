@@ -61,7 +61,7 @@ dependencies=[
     "torch-scatter",
     "torch-sparse",
     "torch-cluster",
-    "rdkit-pypi",
+    "rdkit",
     "PyTDC==1.1.15",
     # PyTDC imports pkg_resources; setuptools>=82 dropped it.
     "setuptools>=69,<82",

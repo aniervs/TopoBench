@@ -162,7 +162,7 @@ def register_all_resolvers():
         infer_list_length_plus_one,
         replace=True,
     )
-    OmegaConf.register_new_resolver("pid", lambda: os.getpid())
+    OmegaConf.register_new_resolver("pid", lambda: os.getpid(), replace=True)
 
 
 def define_task_level(dataset_task_level, learning_setting):

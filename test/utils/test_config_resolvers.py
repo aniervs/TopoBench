@@ -912,3 +912,163 @@ class TestConfigResolvers:
     def test_get_all_encoding_dimensions_pprfe_missing_uses_default(self):
         """Test get_all_encoding_dimensions with PPRFE absent from parameters using default 10."""
         assert get_all_encoding_dimensions(["PPRFE"], {}) == [10]
+
+
+class TestNewHopseResolvers:
+    """Targeted tests for the HOPSE-era resolvers added in this branch."""
+
+    def setup_method(self):
+        """Setup method."""
+        import hydra
+        from omegaconf import OmegaConf  # noqa: F401
+
+        hydra.core.global_hydra.GlobalHydra.instance().clear()
+
+    # ---- get_routes_from_neighborhoods ----
+
+    def test_get_routes_from_neighborhoods_basic(self):
+        from topobench.utils.config_resolvers import (
+            get_routes_from_neighborhoods,
+        )
+
+        nbhds = [
+            "up_adjacency-0",
+            "up_incidence-0",
+            "down_incidence-1",
+            "2-up_incidence-0",
+        ]
+        routes = get_routes_from_neighborhoods(nbhds)
+        assert routes == [[0, 0], [0, 1], [1, 0], [0, 2]]
+
+    def test_get_routes_from_neighborhoods_rejects_unknown(self):
+        from topobench.utils.config_resolvers import (
+            get_routes_from_neighborhoods,
+        )
+
+        with pytest.raises(Exception, match="Invalid neighborhood"):
+            get_routes_from_neighborhoods(["something_weird-0"])
+
+    # ---- get_pse_dimensions ----
+
+    @pytest.mark.parametrize(
+        "encodings, parameters, expected",
+        [
+            (
+                ["LapPE"],
+                {"LapPE": {"max_pe_dim": 4, "include_eigenvalues": False}},
+                [4],
+            ),
+            (
+                ["LapPE"],
+                {"LapPE": {"max_pe_dim": 4, "include_eigenvalues": True}},
+                [8],
+            ),
+            (["RWSE"], {"RWSE": {"max_pe_dim": 6}}, [6]),
+            (["ElectrostaticPE"], {}, [7]),
+            (
+                ["HKdiagSE"],
+                {"HKdiagSE": {"kernel_param_HKdiagSE": [1, 5]}},
+                [4],
+            ),
+            (
+                ["HKdiagSE"],
+                {"HKdiagSE": {"kernel_param_HKdiagSE": 3}},
+                [3],
+            ),
+        ],
+    )
+    def test_get_pse_dimensions_parametrized(
+        self, encodings, parameters, expected
+    ):
+        from topobench.utils.config_resolvers import get_pse_dimensions
+
+        assert get_pse_dimensions(encodings, parameters) == expected
+
+    # ---- infer_list_length / +1 / get_list_element ----
+
+    def test_infer_list_length(self):
+        from topobench.utils.config_resolvers import infer_list_length
+
+        assert infer_list_length([]) == 0
+        assert infer_list_length([1, 2, 3]) == 3
+
+    def test_infer_list_length_plus_one(self):
+        from topobench.utils.config_resolvers import (
+            infer_list_length_plus_one,
+        )
+
+        assert infer_list_length_plus_one([]) == 1
+        assert infer_list_length_plus_one([10, 20]) == 3
+
+    def test_get_list_element(self):
+        from topobench.utils.config_resolvers import get_list_element
+
+        assert get_list_element([10, 20, 30], 0) == 10
+        assert get_list_element([10, 20, 30], -1) == 30
+        with pytest.raises(IndexError):
+            get_list_element([1], 5)
+
+    # ---- infer_in_hasse_graph_agg_dim ----
+
+    def test_infer_in_hasse_graph_agg_dim_copy_initial_scalar_dim_in(self):
+        from topobench.utils.config_resolvers import (
+            infer_in_hasse_graph_agg_dim,
+        )
+
+        out = infer_in_hasse_graph_agg_dim(
+            neighborhoods=["up_adjacency-0", "up_incidence-0"],
+            dim_pses=[5, 7],
+            complex_dim=2,
+            max_hop=3,
+            dim_in=4,
+            dim_hidden_graph=16,
+            dim_hidden_node=8,
+            copy_initial=True,
+            use_edge_attr=False,
+        )
+        assert isinstance(out, list)
+        assert len(out) == 3  # complex_dim + 1
+        assert all(len(row) == 3 for row in out)  # max_hop
+        # Hop 0 should be the input dim (since copy_initial=True).
+        assert out[0][0] == 4
+        assert out[1][0] == 4
+
+    def test_infer_in_hasse_graph_agg_dim_with_edge_attr(self):
+        from topobench.utils.config_resolvers import (
+            infer_in_hasse_graph_agg_dim,
+        )
+
+        out = infer_in_hasse_graph_agg_dim(
+            neighborhoods=["up_adjacency-0"],
+            dim_pses=[5],
+            complex_dim=1,
+            max_hop=2,
+            dim_in=[3, 9],
+            dim_hidden_graph=16,
+            dim_hidden_node=8,
+            copy_initial=True,
+            use_edge_attr=True,
+        )
+        # Hop 0 for dim 0 is dim_in[0]; for dim 1 is dim_in[1] (edge attr).
+        assert out[0][0] == 3
+        assert out[1][0] == 9
+
+    def test_infer_in_hasse_graph_agg_dim_no_copy_initial(self):
+        from topobench.utils.config_resolvers import (
+            infer_in_hasse_graph_agg_dim,
+        )
+
+        out = infer_in_hasse_graph_agg_dim(
+            neighborhoods=["up_adjacency-0"],
+            dim_pses=[5],
+            complex_dim=1,
+            max_hop=2,
+            dim_in=4,
+            dim_hidden_graph=16,
+            dim_hidden_node=8,
+            copy_initial=False,
+            use_edge_attr=False,
+        )
+        # All initial entries == dim_hidden_graph + dim_hidden_node.
+        assert out[0][0] == 24
+        assert out[1][0] == 24

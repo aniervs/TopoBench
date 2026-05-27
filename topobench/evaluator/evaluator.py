@@ -150,9 +150,6 @@ class TBEvaluator(AbstractEvaluator):
                 "Multilabel classification evaluator is not supported yet"
             )
 
-        else:
-            raise ValueError(f"Invalid task {self.task}")
-
     def compute(self):
         r"""Compute the metrics.
 

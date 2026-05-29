@@ -194,12 +194,18 @@ By mastering these configuration options, you can easily customize your experime
 
 
 ## :bike: Experiments Reproducibility
-To reproduce Table 1 from the [`TopoBench: A Framework for Benchmarking Topological Deep Learning`](https://arxiv.org/pdf/2406.06642) paper, please run the following command:
+
+The `scripts/` folder contains all the scripts needed to reproduce the experiments from our works. Each subfolder corresponds to one paper:
+
+- **[TopoBench: A Framework for Benchmarking Topological Deep Learning](https://arxiv.org/pdf/2406.06642)** — `scripts/topobench/`
+- **[TopoTune: A Framework for Generalized Combinatorial Complex Neural Networks](https://arxiv.org/pdf/2410.06530)** — `scripts/topotune/`
+- **HOPSE: Higher-Order Positional and Structural Encodings** — `scripts/hopse/`
+
+For example, to reproduce Table 1 from the TopoBench paper:
 
 ```bash
-bash scripts/reproduce.sh
+bash scripts/topobench/reproduce.sh
 ```
-**Remark:** We have additionally provided a public [W&B (Weights & Biases) project](https://wandb.ai/telyatnikov_sap/TopoBenchmark_main?nw=nwusertelyatnikov_sap) with logs for the corresponding runs (updated on June 11, 2024).
 
 
 ## :anchor: Tutorials

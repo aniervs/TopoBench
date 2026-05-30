@@ -11,8 +11,8 @@
 # ==============================================================================
 # DO NOT MISS THIS
 
-export SELECTED_GPUS="0,1,2,3,4,5,6,7"
-wandb_entity="gbg141-hopse"
+export SELECTED_GPUS="0,1,2,3,4,5,6,7" # Define your selected GPUs here
+wandb_entity="" # Define your wandb entity here
 RESUME=true
   # Set to true to skip already-completed runs (reads SUCCESSFUL_RUNS.log)
 

@@ -19,7 +19,7 @@ script_name="$(basename "${BASH_SOURCE[0]}" .sh)"
 project_name="${script_name}"
 log_group="gin_sweep"
 LOG_DIR="./logs/${log_group}"
-wandb_entity="gbg141-hopse"
+wandb_entity="" # Define your wandb entity here
 
 echo "=========================================================="
 echo " Preparing log directory: $LOG_DIR"

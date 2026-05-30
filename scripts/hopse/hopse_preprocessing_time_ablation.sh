@@ -23,8 +23,8 @@
 # ==============================================================================
 # DO NOT MISS THIS
 
-export SELECTED_GPUS="0"
-wandb_entity="gbg141-hopse"
+export SELECTED_GPUS="0,1,2,3,4,5,6,7" # Define your selected GPUs here
+wandb_entity="" # Define your wandb entity here
 RESUME=false
 
 # ==============================================================================

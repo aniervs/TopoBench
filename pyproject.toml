@@ -168,7 +168,10 @@ convention = "numpy"
 version = {attr = "topobench.__version__"}
 
 [tool.setuptools.packages.find]
-include = ["topobench", "topobench.*"]
+include = ["topobench", "topobench.*", "configs"]
+
+[tool.setuptools.package-data]
+configs = ["**/*.yaml"]
 
 [tool.mypy]
 warn_redundant_casts = true
